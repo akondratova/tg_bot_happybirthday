@@ -3,66 +3,85 @@ import datetime
 import pytz
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from telegram import Bot
-from telegram.ext import Application
-from telegram.ext import ContextTypes
-from telegram.ext import JobQueue
+from telegram.ext import Application, ContextTypes
 
 TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = int(os.getenv("CHAT_ID"))
 SHEET_NAME = os.getenv("SHEET_NAME")
 
-bot = Bot(token=TOKEN)
 
 def get_sheet():
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
+
     creds = ServiceAccountCredentials.from_json_keyfile_name(
-        "credentials.json", scope
+        "credentials.json",
+        scope
     )
+
     client = gspread.authorize(creds)
+
     return client.open(SHEET_NAME).sheet1
 
+
 async def check_birthdays(context: ContextTypes.DEFAULT_TYPE):
+
     sheet = get_sheet()
     data = sheet.get_all_records()
 
     today = datetime.datetime.now(pytz.timezone("Europe/Moscow"))
-    today_day = today.day
-    today_month = today.month
 
     for row in data:
-        name = row["ФИО"]
-        birthday = row["День Рождения"]
+
+        name = row.get("ФИО")
+        birthday = row.get("День Рождения")
 
         if not birthday:
             continue
 
         birth_date = datetime.datetime.strptime(birthday, "%d.%m.%Y")
 
-        if birth_date.day == today_day and birth_date.month == today_month:
+        if birth_date.day == today.day and birth_date.month == today.month:
+
             age = today.year - birth_date.year
 
             message = (
                 f"🎉 С Днем Рождения, {name}! 🎂\n"
-                f"Желаю счастья, здоровья, побольше положительных моментов в жизни! 🥳"
+                f"Сегодня исполняется {age} лет!\n"
+                f"Желаем счастья, здоровья и отличного настроения! 🥳"
             )
 
-            await context.bot.send_message(chat_id=CHAT_ID, text=message)
+            await context.bot.send_message(
+                chat_id=CHAT_ID,
+                text=message
+            )
+
+            print(f"Поздравление отправлено: {name}")
+
 
 async def main():
+
     application = Application.builder().token(TOKEN).build()
 
-    # Запуск каждый день в 09:00 по Москве
-    job_queue: JobQueue = application.job_queue
-    job_queue.run_daily(
+    tz = pytz.timezone("Europe/Moscow")
+
+    application.job_queue.run_daily(
         check_birthdays,
-        time=datetime.time(hour=9, minute=0, tzinfo=pytz.timezone("Europe/Moscow"))
+        time=datetime.time(hour=9, minute=0, tzinfo=tz)
     )
 
-    await application.run_polling()
+    print("Бот запущен")
+
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+
+    # чтобы процесс не завершался
+    while True:
+        await asyncio.sleep(3600)
+
 
 if __name__ == "__main__":
     import asyncio
