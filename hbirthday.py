@@ -61,9 +61,7 @@ async def check_birthdays(context: ContextTypes.DEFAULT_TYPE):
             print(f"Поздравление отправлено: {name}")
 
 
-async def main():
-
-    application = Application.builder().token(TOKEN).build()
+async def post_init(application: Application):
 
     tz = pytz.timezone("Europe/Moscow")
 
@@ -74,15 +72,18 @@ async def main():
 
     print("Бот запущен")
 
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
 
-    # чтобы процесс не завершался
-    while True:
-        await asyncio.sleep(3600)
+def main():
+
+    application = (
+        Application.builder()
+        .token(TOKEN)
+        .post_init(post_init)
+        .build()
+    )
+
+    application.run_polling()
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
